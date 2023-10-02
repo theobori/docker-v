@@ -11,26 +11,35 @@ FILENAME=$(basename $0)
 
 DOCKER_IMAGE=busybox:latest
 
+ARG_IMPORT=
+ARG_EXPORT=
+
 # Default variables
+ARG_INDEX=0
 DOCKER_VOLUME=
 HOST_DIRECTORY=./
-CALL_ID=1
+CALL_ID=2
+TARBALL_FILENAME=
 
 function print_help() {
     cat <<EOF
 $FILENAME
 
+By default this script works with directories,
+but supports tarball as well.
+
 Optional arguments
   -h        Show this help message
   -v        Docker volume name
   -d        Host directory path (default is the current directory)
-  -i        Import the Docker volume from a directory
-  -e        Export a Docker volume into a directory
+  -i        (boolean) Import the Docker volume from a directory
+  -e        (boolean) Export a Docker volume into a directory
+  -a        Tarball filename (optional)
 EOF
 }
 
 function parse() {
-    while getopts "w:d:v:hie" arg; do
+    while getopts "w:d:a:v:hie" arg; do
         case $arg in
             v)
                 DOCKER_VOLUME=$OPTARG
@@ -46,6 +55,11 @@ function parse() {
             
             e)
                 CALL_ID=2
+                ;;
+            
+            a)
+                TARBALL_FILENAME=$OPTARG
+                ARG_INDEX=1
                 ;;
 
             h)
@@ -72,16 +86,24 @@ function docker_volume_call() {
         $DOCKER_IMAGE \
         sh -c "$1";
     then
+        echo "Unable to exec the busybox Docker container command"
         return 1
     fi
 }
 
 function docker_volume_import() {
-    docker_volume_call "cp -rT /host_dir /$DOCKER_VOLUME"
+    if [[ $TARBALL_FILENAME ]] && ! file "$HOST_DIRECTORY/$TARBALL_FILENAME" \
+        | grep -q ".tar.gz: gzip compressed";
+    then
+        echo "$TARBALL_FILENAME is not a tarball, must be a gzip compressed data"
+        return 1
+    fi
+    
+    docker_volume_call "${ARG_IMPORT[$ARG_INDEX]}"
 }
 
 function docker_volume_export() {
-    docker_volume_call "cp -rT /$DOCKER_VOLUME -t /host_dir"
+    docker_volume_call "${ARG_EXPORT[$ARG_INDEX]}"
 }
 
 # $1 -> Docker volume name
@@ -121,9 +143,40 @@ function _call() {
         "and host directory $HOST_DIRECTORY are successfull."
 }
 
+function _init() {
+    local tar_strip=0
+
+    # Import
+    # Check tarball file for the import
+    if [[
+            $TARBALL_FILENAME \
+            && $CALL_ID -eq 1
+    ]]; then
+        [[ "$(
+            tar \
+                -tf "$HOST_DIRECTORY/$TARBALL_FILENAME" \
+                | head -n 1 \
+                | tail -c 2
+            )" == "/"
+        ]] && tar_strip=1
+    fi
+
+    ARG_IMPORT=(
+        "cp -rT /host_dir /$DOCKER_VOLUME"
+        "tar -xvzf /host_dir/$TARBALL_FILENAME -C /$DOCKER_VOLUME --strip $tar_strip"
+    )
+
+    # Export
+    ARG_EXPORT=(
+        "cp -rT /$DOCKER_VOLUME -t /host_dir"
+        "tar -cvzf /host_dir/$TARBALL_FILENAME /$DOCKER_VOLUME"
+    )
+}
+
 function main() {
     parse $@ || exit 1
 
+    _init
     _call
 }
 
