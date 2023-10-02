@@ -91,14 +91,7 @@ function docker_volume_call() {
     fi
 }
 
-function docker_volume_import() {
-    if [[ $TARBALL_FILENAME ]] && ! file "$HOST_DIRECTORY/$TARBALL_FILENAME" \
-        | grep -q ".tar.gz: gzip compressed";
-    then
-        echo "$TARBALL_FILENAME is not a tarball, must be a gzip compressed data"
-        return 1
-    fi
-    
+function docker_volume_import() {    
     docker_volume_call "${ARG_IMPORT[$ARG_INDEX]}"
 }
 
@@ -143,18 +136,38 @@ function _call() {
         "and host directory $HOST_DIRECTORY are successfull."
 }
 
+# $1 -> tarball full path
+function tarball_import_check() {    
+    # Check if the operations are for a tarball file
+    # + if its for the import
+    if [[
+            -z $TARBALL_FILENAME \
+            && $CALL_ID -ne 1
+    ]]; then
+        return 1
+    fi
+
+    # Check the file type
+    if ! file $1 \
+        | grep -q ".tar.gz: gzip compressed";
+    then
+        echo "$TARBALL_FILENAME is not a tarball, must be a gzip compressed data"
+        return 1
+    fi
+    
+    return 0
+}
+
 function _init() {
+    local tarball_fullpath="$HOST_DIRECTORY/$TARBALL_FILENAME"
     local tar_strip=0
 
     # Import
     # Check tarball file for the import
-    if [[
-            $TARBALL_FILENAME \
-            && $CALL_ID -eq 1
-    ]]; then
+    if tarball_import_check $tarball_fullpath; then
         [[ "$(
             tar \
-                -tf "$HOST_DIRECTORY/$TARBALL_FILENAME" \
+                -tf $tarball_fullpath \
                 | head -n 1 \
                 | tail -c 2
             )" == "/"
