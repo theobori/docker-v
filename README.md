@@ -40,7 +40,7 @@ Import a directory to a Docker volume
     -d input_dir -i
 ```
 
-Import a tarball (then extract) directory to a Docker volume
+Import a tarball (then extract) to a Docker volume
 
 ```bash
 ./docker-v \

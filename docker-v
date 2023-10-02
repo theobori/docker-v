@@ -78,7 +78,6 @@ function parse() {
 
 # $1 -> command to exec inside the container
 function docker_volume_call() {
-    echo $1
     if ! docker run \
         --rm \
         -v "$HOST_DIRECTORY:/host_dir" \
@@ -142,7 +141,7 @@ function tarball_import_check() {
     # + if its for the import
     if [[
             -z $TARBALL_FILENAME \
-            && $CALL_ID -ne 1
+            || $CALL_ID -ne 1
     ]]; then
         return 1
     fi
@@ -152,7 +151,7 @@ function tarball_import_check() {
         | grep -q ".tar.gz: gzip compressed";
     then
         echo "$TARBALL_FILENAME is not a tarball, must be a gzip compressed data"
-        return 1
+        exit 1
     fi
     
     return 0
