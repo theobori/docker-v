@@ -1,0 +1,130 @@
+#!/usr/bin/env bash
+
+# Bash strict mode (prevention)
+set -euo pipefail
+
+# Constants
+
+# Script metadata
+VERSION=0.0.1
+FILENAME=$(basename $0)
+
+DOCKER_IMAGE=busybox:latest
+
+# Default variables
+DOCKER_VOLUME=
+HOST_DIRECTORY=./
+CALL_ID=1
+
+function print_help() {
+    cat <<EOF
+$FILENAME
+
+Optional arguments
+  -h        Show this help message
+  -v        Docker volume name
+  -d        Host directory path (default is the current directory)
+  -i        Import the Docker volume from a directory
+  -e        Export a Docker volume into a directory
+EOF
+}
+
+function parse() {
+    while getopts "w:d:v:hie" arg; do
+        case $arg in
+            v)
+                DOCKER_VOLUME=$OPTARG
+                ;;
+            
+            d)
+                HOST_DIRECTORY=$OPTARG
+                ;;
+            
+            i)
+                CALL_ID=1
+                ;;
+            
+            e)
+                CALL_ID=2
+                ;;
+
+            h)
+                print_help
+                exit 0
+                ;;
+
+        esac    
+    done
+
+    if [[ -z $DOCKER_VOLUME ]]; then
+        echo "You must set a Docker volume"
+        return 1
+    fi
+}
+
+# $1 -> command to exec inside the container
+function docker_volume_call() {
+    echo $1
+    if ! docker run \
+        --rm \
+        -v "$HOST_DIRECTORY:/host_dir" \
+        -v "$DOCKER_VOLUME:/$DOCKER_VOLUME" \
+        $DOCKER_IMAGE \
+        sh -c "$1";
+    then
+        return 1
+    fi
+}
+
+function docker_volume_import() {
+    docker_volume_call "cp -rT /host_dir /$DOCKER_VOLUME"
+}
+
+function docker_volume_export() {
+    docker_volume_call "cp -rT /$DOCKER_VOLUME -t /host_dir"
+}
+
+# $1 -> Docker volume name
+function docker_volume_check() {
+    if docker volume inspect \
+        "$1" \
+        > /dev/null 2>&1;
+    then 
+        return 0    
+    fi
+    
+    echo "The Docker volume $1 doesn't exist"
+    echo "Creates Docker volume $1"
+    
+    docker volume create "$1"
+}
+
+function _call() {
+    local op=
+
+    docker_volume_check "$DOCKER_VOLUME"   
+
+    case $CALL_ID in
+        1)
+            docker_volume_import
+            op="Import"
+            ;;
+        
+        2)
+            docker_volume_export
+            op="Export"
+            ;;
+    esac
+
+    echo \
+        "[+] $op operations with Docker volume $DOCKER_VOLUME" \
+        "and host directory $HOST_DIRECTORY are successfull."
+}
+
+function main() {
+    parse $@ || exit 1
+
+    _call
+}
+
+main $@
