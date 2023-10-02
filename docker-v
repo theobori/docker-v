@@ -32,8 +32,8 @@ Optional arguments
   -h        Show this help message
   -v        Docker volume name
   -d        Host directory path (default is the current directory)
-  -i        (boolean) Import the Docker volume from a directory
-  -e        (boolean) Export a Docker volume into a directory
+  -i        (boolean) Import the Docker volume from a directory/tarball
+  -e        (boolean) Export a Docker volume into a directory/tarball
   -a        Tarball filename (optional)
 EOF
 }
